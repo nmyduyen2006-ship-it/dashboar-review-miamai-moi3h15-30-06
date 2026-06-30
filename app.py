@@ -106,6 +106,44 @@ def detect_danger(text: str, kw_cfg: dict) -> list:
     tl = str(text).lower()
     return [(kw, lv, ic) for kw,(lv,ic) in kw_cfg.items() if kw in tl]
 
+# ─── TỪ ĐIỂN TỪ KHÓA CẢM XÚC (dùng để chấm sentiment theo NGÔN NGỮ review) ────
+POSITIVE_WORDS = [
+    "tốt","tuyệt","tuyệt vời","hài lòng","thích","ưng ý","đẹp","chất lượng",
+    "nhanh","đáng tiền","đáng giá","xuất sắc","ổn","ok","oke","ngon","bền",
+    "đúng mô tả","như mô tả","sẽ ủng hộ","ủng hộ","recommend","đáng mua",
+    "yêu thích","mê","perfect","hoàn hảo","quá tốt","quá ok","giao nhanh",
+    "đóng gói cẩn thận","dễ thương","xịn","chuẩn","đáng yêu","hài hước",
+]
+NEGATIVE_WORDS = [
+    "tệ","kém","dở","thất vọng","lừa đảo","hàng giả","fake","dị ứng",
+    "ngộ độc","hỏng","lỗi","hư","rách","bẩn","chậm","không như mô tả",
+    "không đáng","phí tiền","bóc phốt","mọc mụn","đau","khó chịu","tức",
+    "ghê","kinh khủng","quá tệ","đừng mua","không nên mua","trả hàng",
+    "hoàn tiền","khiếu nại","gãy","vỡ","mốc","mùi hôi","nhăn","xấu",
+    "không hài lòng","rất tệ","chán","bực","mất công","sai size","sai màu",
+]
+
+def compute_sentiment(review_text: str, is_sarcasm: bool) -> str:
+    """
+    Sentiment dựa trên NGÔN NGỮ/nội dung review (đếm từ khóa tích cực vs tiêu cực),
+    KHÔNG dựa vào rating (vì rating cao vẫn có thể là review mỉa mai/tiêu cực).
+    Nếu bị gắn cờ mỉa mai -> luôn ép về Tiêu cực, vì mỉa mai luôn là tín hiệu xấu
+    dù câu chữ bề mặt nghe có vẻ khen.
+    """
+    if is_sarcasm:
+        return "Tiêu cực"
+
+    tl = str(review_text).lower()
+    pos_hits = sum(1 for w in POSITIVE_WORDS if w in tl)
+    neg_hits = sum(1 for w in NEGATIVE_WORDS if w in tl)
+
+    if neg_hits > pos_hits:
+        return "Tiêu cực"
+    elif pos_hits > neg_hits:
+        return "Tích cực"
+    else:
+        return "Trung tính"
+
 # ─── SIDEBAR ─────────────────────────────────────────────────────────────────
 with st.sidebar:
     st.markdown("""
@@ -219,16 +257,20 @@ with tab_upload:
                         progress.empty()
 
                         df_raw["Mỉa Mai"]   = ["Có" if r["prediction"] == "MIA MAI" else "Không" for r in results]
-                        df_raw["Sentiment"] = ["Tiêu cực" if r["prediction"] == "MIA MAI" else "Tích cực" for r in results]
+
+                        if "Rating"   not in df_raw.columns: df_raw["Rating"]   = 3
+                        if "Nền Tảng" not in df_raw.columns: df_raw["Nền Tảng"] = "Không rõ"
+                        if "Ngày"     not in df_raw.columns: df_raw["Ngày"]     = pd.Timestamp.today()
+
+                        df_raw["Sentiment"] = [
+                            compute_sentiment(rv, mm == "Có")
+                            for rv, mm in zip(df_raw["Review"], df_raw["Mỉa Mai"])
+                        ]
                         df_raw["Lý Do AI"]  = ["Độ tin cậy: " + str(round(r["confidence"], 2)) for r in results]
 
                         df_raw["Từ Khóa Nguy Cấp"] = df_raw["Review"].apply(
                             lambda x: ", ".join(kw for kw,_,_ in detect_danger(x, keyword_cfg))
                         )
-
-                        if "Rating"   not in df_raw.columns: df_raw["Rating"]   = 3
-                        if "Nền Tảng" not in df_raw.columns: df_raw["Nền Tảng"] = "Không rõ"
-                        if "Ngày"     not in df_raw.columns: df_raw["Ngày"]     = pd.Timestamp.today()
 
                         st.session_state["df_analyzed"] = df_raw
                         st.rerun()
@@ -260,7 +302,7 @@ with tab_manual:
                         "Review": txt, "Rating": rt, "Nền Tảng": plt,
                         "Ngày": pd.Timestamp.today(),
                         "Mỉa Mai":   "Có" if res["prediction"] == "MIA MAI" else "Không",
-                        "Sentiment": "Tiêu cực" if res["prediction"] == "MIA MAI" else "Tích cực",
+                        "Sentiment": compute_sentiment(txt, res["prediction"] == "MIA MAI"),
                         "Lý Do AI":  "Độ tin cậy: " + str(round(res["confidence"], 2)),
                         "Từ Khóa Nguy Cấp": ", ".join(kw for kw,_,_ in detect_danger(txt, keyword_cfg))
                     })
