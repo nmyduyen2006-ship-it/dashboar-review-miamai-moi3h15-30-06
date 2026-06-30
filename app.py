@@ -7,6 +7,14 @@ import re
 import time
 from datetime import datetime
 
+# ─── PAGE CONFIG (PHẢI LÀ LỆNH STREAMLIT ĐẦU TIÊN) ───────────────────────────
+st.set_page_config(
+    page_title="Sarcasm & Sentiment Dashboard",
+    page_icon="🎯",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 # 1. IMPORT CÁC HÀM CẦN THIẾT TRƯỚC TIÊN
 from attention_module import load_attention_model, predict_with_attention
 
@@ -19,14 +27,6 @@ def get_model():
 
 # 3. GỌI HÀM ĐỂ LẤY MODEL VÀ TOKENIZER (Chỉ chạy 1 lần khi ứng dụng khởi động)
 model, tokenizer = get_model()
-
-# ─── PAGE CONFIG ─────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="Sarcasm & Sentiment Dashboard",
-    page_icon="🎯",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 # ─── CUSTOM CSS ───────────────────────────────────────────────────────────────
 st.markdown("""
